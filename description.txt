@@ -1,0 +1,6 @@
+Basicamente, esse projeto precisa:
+
+
+--Recuperar os dados da ZIG
+--Criar um pedido no OMIE
+--Repassar os produtos transacionados na ZIG para a OMIE
