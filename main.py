@@ -52,21 +52,20 @@ if __name__ == "__main__":
             else:
                 produtos_a_cadastrar.append(produto)
                 print(f"Produto a cadastrar: {produto}")
-
+                print(f"O valor unitário é {produto['unitValue']} / 100")
                 produto = {
                     "codigo_produto_integracao": produto['productSku'],
                     "codigo": f'PROD{produto["productSku"]}',
                     "descricao": produto['productName'],
                     "unidade": "UN",
                     "ncm": "94013090",
-                    "valor_unitario": produto['unitValue'] / 100,
+                    "valor_unitario": produto['unitValue'] / 100
                     
                 }
 
                 #incluir_produto(APP_KEY, APP_SECRET, produto)
                 #time.sleep(1)  # Para evitar problemas de limite de requisições
                 #print(f"Produto cadastrado: {produto['descricao']}")
-                
 
     #lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
 
@@ -99,6 +98,7 @@ if __name__ == "__main__":
             "ncm": "94033000",
             "quantidade": 1,
             "unidade": "UN",
+            "tipo_desconto":"V",
             "valor_desconto": 0,
             "valor_unitario": 9381.09
                 }
@@ -108,8 +108,8 @@ if __name__ == "__main__":
                 
             ],
         "informacoes_adicionais": {
-            "codigo_categoria": "1.11.01",
-            "codigo_conta_corrente": 2461399601, #nCodCC na api ListarContasCorrentes
+            "codigo_categoria": "1.01.01",
+            "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes
             "consumidor_final": "S",
             "enviar_email": "N"
         },
