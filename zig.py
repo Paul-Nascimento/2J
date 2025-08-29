@@ -70,7 +70,8 @@ def run_pipeline(rede, token):
 
     import pandas as pd
 
-    
+    df = pd.DataFrame(produtos)
+    df.to_excel('produtoszig.xlsx')
 
 
     print("\n=== 3. Faturamento ===")
