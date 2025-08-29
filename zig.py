@@ -49,8 +49,8 @@ def run_pipeline(rede, token):
 
     # Período para teste (últimos 7 dias)
     hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=2)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=2)).strftime("%Y-%m-%d")
+    dtfim = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
+    dtinicio = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
     #dtinicio = dtfim
     print("=== 1. Buscando lojas ===")
     lojas = api.get_lojas()
@@ -68,22 +68,39 @@ def run_pipeline(rede, token):
     pprint.pprint(produtos)
     print(f"Produtos encontrados: {len(produtos) if produtos else 0}")
 
+    import pandas as pd
+
+    
+
+
     print("\n=== 3. Faturamento ===")
     faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
     valor_total = sum(item.get("value", 0) for item in faturamento) if faturamento else 0
     print(f"Faturamento total: R$ {valor_total / 100:.2f}")
+    df = pd.DataFrame(faturamento)
+    df.to_excel("saida_faturamento.xlsx", index=False)    
 
     print("\n=== 4. Detalhes de Faturamento (Máquinas) ===")
     detalhes = api.get_detalhes_maquinas(dtinicio, dtfim, loja_id)
     print(f"Máquinas encontradas: {len(detalhes) if detalhes else 0}")
+    df = pd.DataFrame(detalhes)
+    df.to_excel("saida_detalhes.xlsx", index=False)    
+
 
     print("\n=== 5. Invoices ===")
     invoices = api.get_invoices(dtinicio, dtfim, loja_id)
     print(f"Notas fiscais encontradas: {len(invoices) if invoices else 0}")
 
+    df = pd.DataFrame(invoices)
+    df.to_excel("saida_checkins.xlsx", index=False)    
+
+
     print("\n=== 6. Check-ins ===")
     checkins = api.get_checkins(dtinicio, dtfim, loja_id)
     print(f"Check-ins encontrados: {len(checkins) if checkins else 0}")
+
+    df = pd.DataFrame(checkins)
+    df.to_excel("saida_checkins.xlsx", index=False)    
 
     # Exibe um resumo consolidado
     resumo = {
@@ -106,4 +123,3 @@ if __name__ == "__main__":
     REDE ="4a7eeb7e-f1a4-4ab9-86ee-2472a26f494a"
     TOKEN = "97d12c95488644a583036818050c3f7c4ed7d40cdc534574baba3b217dfe137e"
     run_pipeline(REDE, TOKEN)
-
