@@ -1,9 +1,8 @@
-
-
-
-
-import requests
+import time
 import json
+import requests
+from typing import List, Dict, Tuple, Optional
+
 
 class OmieContaReceberAPI:
     BASE_URL = "https://app.omie.com.br/api/v1/financas/contareceber/"
@@ -69,7 +68,7 @@ def consultar_clientes(app_key,app_secret):
         "app_secret": app_secret,
         "param": [{
             "pagina": 1,
-            "registros_por_pagina": 1
+            "registros_por_pagina": 386
         }]
     }
     headers = {"Content-Type": "application/json"}
@@ -232,6 +231,123 @@ def listar_ncm(app_key: str, app_secret: str, pagina: int = 1, registros_por_pag
         raise Exception(f"Erro da API Omie (NCM): {result['faultstring']}")
     return result
 # Uso:
+def incluir_produto(app_key: str, app_secret: str, produto: dict, session: Optional[requests.Session] = None) -> dict:
+    """
+    Inclui UM produto na Omie.
+    `produto` deve seguir o schema do endpoint /geral/produtos - call: IncluirProduto.
+    Exemplo mínimo:
+    {
+        "codigo_produto_integracao": "SKU-123",
+        "descricao": "Produto Exemplo",
+        "unidade": "UN",
+        "ncm": "12345678",            # opcional, mas recomendado
+        "ean": "7891234567890",       # opcional
+        "peso_liq": 0,                # opcional
+        "peso_bruto": 0,              # opcional
+        "origem": "0"                 # opcional (0 = nacional, conforme Tabela de Origem)
+        ...
+    }
+    """
+    url = "https://app.omie.com.br/api/v1/geral/produtos/"
+    payload = {
+        "call": "IncluirProduto",
+        "app_key": app_key,
+        "app_secret": app_secret,
+        "param": [produto]
+    }
+    sess = session or requests.Session()
+    resp = sess.post(url, headers={"Content-Type": "application/json"}, data=json.dumps(payload))
+    try:
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        # Log detalhado
+        raise RuntimeError(f"HTTP error ao incluir produto: {e}\nStatus={resp.status_code}\nRetorno={resp.text}") from e
+
+    data = resp.json()
+    if data.get("faultstring"):
+        # Erro semântico/regra de negócio na Omie
+        raise RuntimeError(f"Erro Omie ao incluir produto: {data['faultstring']}")
+    return data
+
+def criar_produtos_em_lote(
+    app_key: str,
+    app_secret: str,
+    produtos: List[Dict],
+    stop_on_error: bool = False,
+    max_retries: int = 3,
+    backoff_base_seconds: float = 1.5
+) -> Tuple[List[Dict], List[Dict]]:
+    """
+    Cria produtos em lote na Omie.
+    - `produtos`: lista de dicionários no schema aceito por IncluirProduto.
+    - `stop_on_error`: se True, para no primeiro erro e lança exceção; se False, continua e acumula falhas.
+    - `max_retries`: tentativas extras para erros 429/5xx (backoff exponencial).
+    - Retorna (sucessos, falhas) onde:
+        sucessos = lista de dicts {"input": produto, "result": resposta_omie}
+        falhas   = lista de dicts {"input": produto, "error": "mensagem do erro"}
+
+    Observação: utilize `codigo_produto_integracao` para idempotência no cadastro.
+    """
+    session = requests.Session()
+    session.headers.update({"Content-Type": "application/json"})
+
+    sucessos = []
+    falhas = []
+
+    for idx, prod in enumerate(produtos, start=1):
+        # Retry simples para erros transitórios
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                result = incluir_produto(app_key, app_secret, prod, session=session)
+                sucessos.append({"input": prod, "result": result})
+                break  # saiu do loop de retry deste item
+            except RuntimeError as err:
+                err_msg = str(err)
+                # Tenta identificar status code 429/5xx no texto (pois já foi englobado na RuntimeError)
+                transient = any(code in err_msg for code in [" 429", " 500", " 502", " 503", " 504"])
+
+                if transient and attempt <= max_retries:
+                    # backoff exponencial
+                    sleep_for = (backoff_base_seconds ** attempt)
+                    time.sleep(sleep_for)
+                    continue  # tenta de novo
+                else:
+                    falhas.append({"input": prod, "error": err_msg})
+                    if stop_on_error:
+                        raise RuntimeError(f"Falha ao criar produto no item {idx}: {err_msg}") from None
+                    break  # segue para o próximo produto
+
+    return sucessos, falhas
+
+
+APP_KEY = '5521527811800'
+APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
+APP_KEY = '5521527811800'
+#categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=10000)
+
+import pandas as pd
+#df = pd.DataFrame(categorias)
+#df.to_excel("saida_categorias_omise.xlsx", index=False)
+
+"""
+
+
+
+clientes = consultar_clientes(APP_KEY,APP_SECRET)
+#resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
+#print("Resposta da API:", resposta)
+resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
+
+import pandas as pd
+df = pd.DataFrame(clientes)
+
+df.to_excel("saida_clientes_omie.xlsx", index=False)
+
+df_cc = pd.DataFrame(resp)
+df_cc.to_excel("saida_contas_correntes_omie.xlsx", index=False)
+
 if __name__ == "__main__":
     APP_KEY = '5521527811800'
     APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
@@ -239,14 +355,20 @@ if __name__ == "__main__":
     #categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
     #cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
     #clientes = consultar_clientes(APP_KEY, APP_SECRET)
-    #lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
+    lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
     
+    import pandas as pd
+    df = pd.DataFrame(lp.get('produto_servico_cadastro', []))
+    df.to_excel("saida_produtos_omie.xlsx", index=False)
+
+    nomes_dos_produtos = [produto['descricao'] for produto in lp.get('produto_servico_cadastro', [])]
+    print(nomes_dos_produtos)
     #cfop = listar_cfop(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
     #ncm =listar_ncm(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
 
     pedido = {
         "cabecalho": {
-            "codigo_cliente": 2483761878, # 'codigo_cliente_omie' na API ListarClientes
+            "codigo_cliente": 2483785544, # 'codigo_cliente_omie' na API ListarClientes
             "codigo_pedido_integracao": "19000000", #Esse valor vem do zig
             "data_previsao": "15/08/2025",
             "etapa": "10",
@@ -302,9 +424,9 @@ if __name__ == "__main__":
         }
 
     #clientes = consultar_clientes(APP_KEY,APP_SECRET)
-    resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
-    print("Resposta da API:", resposta)
-    #resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
+    #resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
+    #print("Resposta da API:", resposta)
+    resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
     #print(resp)
     
 
@@ -314,7 +436,7 @@ if __name__ == "__main__":
 #Inserir itens no pedido
 
 
-"""
+
 if __name__ == "__main__":
     app_key = '5521527811800'
     app_secret = '9cff454af6348882c175d91a11f0d5d9' 
