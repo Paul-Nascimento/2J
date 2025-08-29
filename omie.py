@@ -322,16 +322,18 @@ def criar_produtos_em_lote(
     return sucessos, falhas
 
 
+"""
 APP_KEY = '5521527811800'
 APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
-APP_KEY = '5521527811800'
-#categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=10000)
+categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=334)
+#resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000)
 
 import pandas as pd
-#df = pd.DataFrame(categorias)
-#df.to_excel("saida_categorias_omise.xlsx", index=False)
+df = pd.DataFrame(categorias)
+df.to_excel("saida_categorias_omie-v4.xlsx", index=False)
 
-"""
+
+
 
 
 
