@@ -73,6 +73,7 @@ def run_pipeline(rede, token):
     df = pd.DataFrame(produtos)
     df.to_excel('produtoszig.xlsx')
 
+    exit()
 
     print("\n=== 3. Faturamento ===")
     faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
