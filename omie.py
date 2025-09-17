@@ -322,7 +322,7 @@ def criar_produtos_em_lote(
     return sucessos, falhas
 
 
-"""
+
 APP_KEY = '5521527811800'
 APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
 categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=334)
@@ -361,8 +361,9 @@ if __name__ == "__main__":
     
     import pandas as pd
     df = pd.DataFrame(lp.get('produto_servico_cadastro', []))
-    df.to_excel("saida_produtos_omie.xlsx", index=False)
+    df.to_excel("saida_produtos_omie2.xlsx", index=False)
 
+    """
     nomes_dos_produtos = [produto['descricao'] for produto in lp.get('produto_servico_cadastro', [])]
     print(nomes_dos_produtos)
     #cfop = listar_cfop(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
