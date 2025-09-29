@@ -151,7 +151,7 @@ def _to_money_cents(valor):
     v = Decimal(int(valor or 0)) / Decimal(100)
     return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-def consolidar_itens(itens, produtos_existentes_dict):
+def consolidar_itens_(itens, produtos_existentes_dict):
     """
     itens: lista de dicts no formato do exemplo.
     identifica_tributacao_func: função(categoria:str) -> {cfop, icms, piscofins, ncm, status}
@@ -173,7 +173,7 @@ def consolidar_itens(itens, produtos_existentes_dict):
         quantidade = int(it.get('count') or 0)
 
         # Chave de agregação (mesmos produto+sku+preço+desconto)
-        chave = (descricao, sku, valor_unitario, valor_desconto)
+        chave = (descricao)
 
         if chave not in consolidados_por_chave:
             # Tributação pela categoria do item
@@ -207,6 +207,157 @@ def consolidar_itens(itens, produtos_existentes_dict):
 
     return list(consolidados_por_chave.values())
 
+def consolidar_itens_para_det(itens, produtos_existentes_dict, unidade_padrao="UN"):
+    """
+    itens: lista de dicts vindos do ZIG (productName, productSku, unitValue, discountValue, count, productCategory, etc.)
+    produtos_existentes_dict: dict {descricao_upper: codigo_produto} do Omie.
+      Ex.: { str(p['descricao']).upper(): p['codigo_produto'] for p in lp['produto_servico_cadastro'] }
+
+    Retorna: lista 'det' no formato do pedido Omie.
+    """
+    consolidados_por_chave = {}
+
+    for it in itens:
+        # Normalizações e conversões
+        descricao = (it.get('productName') or '').strip()[:119]
+        descricao_upper = descricao.upper()
+        sku = (it.get('productSku') or '').strip()
+
+        # Supondo helpers existentes para normalizar valores monetários
+        valor_unitario = _to_money_cents(it.get('unitValue'))
+        valor_desconto = _to_money_cents(it.get('discountValue'))
+
+        if valor_unitario > 0:
+            quantidade = int(it.get('count') or 0)
+
+            # Chave de agregação (aqui: descrição; ajuste se quiser agregar também por preço/sku)
+            chave = (descricao,)
+
+            if chave not in consolidados_por_chave:
+                # Tributação pela categoria do item
+                categoria = it.get('productCategory') or ''
+                trib = identifica_tributacao(categoria) or {}
+
+                # Código do produto no Omie (por descrição upper)
+                codigo_produto = produtos_existentes_dict.get(descricao_upper)
+
+                consolidados_por_chave[chave] = {
+                    # dados base do item
+                    'descricao': descricao,
+                    'sku': sku,
+                    'valor_unitario': float(valor_unitario),
+                    'valor_desconto': float(valor_desconto),
+                    'quantidade': quantidade,
+                    'unidade': unidade_padrao,
+
+                    # tributação
+                    'cfop': trib.get('cfop'),
+                    'icms': trib.get('icms'),
+                    'piscofins': trib.get('piscofins'),
+                    'ncm': trib.get('ncm'),
+                    'status_tributacao': trib.get('status'),
+
+                    # Omie
+                    'codigo_produto': codigo_produto
+                }
+            else:
+                # soma quantidades
+                consolidados_por_chave[chave]['quantidade'] += quantidade
+                # se quiser somar descontos linha-a-linha, descomente:
+                # consolidados_por_chave[chave]['valor_desconto'] += float(valor_desconto)
+
+    # Transforma no formato 'det' exigido pelo Omie
+    det = []
+    for idx, item in enumerate(consolidados_por_chave.values(), start=1):
+        det.append({
+            "ide": {
+                # API pede 1,2,3... como string
+                "codigo_item_integracao": str(idx)
+            },
+            "inf_adic": {
+                "peso_bruto": 1,
+                "peso_liquido": 1
+            },
+            "produto": {
+                "cfop": str(item.get("cfop") or ""),                # ex.: "5102"
+                "codigo_produto": str(item.get("codigo_produto") or ""),
+                "descricao": item.get("descricao") or "",
+                "ncm": str(item.get("ncm") or ""),
+                "quantidade": int(item.get("quantidade") or 0),
+                "unidade": item.get("unidade") or unidade_padrao,
+                "tipo_desconto": "V",                                # sempre "V"
+                "valor_desconto": float(item.get("valor_desconto") or 0.0),
+                "valor_unitario": float(item.get("valor_unitario") or 0.0),
+            }
+        })
+
+    return det
+
+from datetime import datetime
+
+def _cents_to_real(v):
+    return round((v or 0) / 100.0, 2)
+
+def _fmt_br_date_from_iso(iso):
+    # ISO: '2025-09-15T14:14:03.478Z' -> '15/09/2025'
+    try:
+        # remove 'Z' se existir
+        iso = (iso or "").replace("Z", "")
+        dt = datetime.fromisoformat(iso)
+        return dt.strftime("%d/%m/%Y")
+    except Exception:
+        return ""
+
+def montar_lista_parcelas(faturamento, data_vencimento=None):
+    """
+    faturamento: lista de dicts retornada pela API (paymentId, paymentName, value, eventDate, ...)
+    data_vencimento: opcional; se informado (ex.: '15/09/2025'), usa essa data para todas as parcelas.
+                     caso contrário, usa a data derivada de eventDate de cada pagamento.
+
+    Retorna: {"parcela": [ ... ]} no formato exigido pelo Omie.
+    """
+    # Considera apenas paymentId 1 (CRÉDITO) e 2 (DÉBITO), e valores > 0
+    pagamentos = [p for p in faturamento if p.get("paymentId") in (1, 2) and (p.get("value") or 0) > 0]
+
+    if not pagamentos:
+        return {"parcela": []}
+
+    total_cents = sum(p["value"] for p in pagamentos)
+    if total_cents == 0:
+        return {"parcela": []}
+
+    # Ordena por paymentId (ou mude para por valor, se preferir)
+    pagamentos.sort(key=lambda x: x.get("paymentId"))
+
+    parcelas = []
+    percentuais = []
+
+    for idx, p in enumerate(pagamentos, start=1):
+        valor_reais = _cents_to_real(p["value"])
+        # percentual bruto (ajustaremos o último para fechar 100,00)
+        perc = round((p["value"] / total_cents) * 100.0, 2)
+        percentuais.append(perc)
+
+        # define data
+        if data_vencimento:
+            dv = data_vencimento
+        else:
+            dv = _fmt_br_date_from_iso(p.get("eventDate"))
+
+        parcelas.append({
+            "data_vencimento": dv,
+            "numero_parcela": idx,
+            "percentual": perc,      # ajuste final depois
+            "valor": valor_reais
+        })
+
+    # Ajuste de arredondamento para fechar exatamente 100.00%
+    soma_perc = round(sum(percentuais), 2)
+    diff = round(100.00 - soma_perc, 2)
+    if parcelas:
+        parcelas[-1]["percentual"] = round(parcelas[-1]["percentual"] + diff, 2)
+
+    return {"parcela": parcelas}
 
 
 def cria_corpo_do_pedido_de_venda():
@@ -221,8 +372,8 @@ def cria_corpo_do_pedido_de_venda():
 
     # Período para teste (últimos 7 dias)
     hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
+    dtfim = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
+    dtinicio = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
     #lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
     
     lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
@@ -231,6 +382,11 @@ def cria_corpo_do_pedido_de_venda():
     for produto in lp['produto_servico_cadastro']
 }
     pprint.pprint(produtos_existentes)
+
+    import pandas as pd 
+
+    df = pd.DataFrame(lp['produto_servico_cadastro'])
+    #df.to_excel('produtosssss.xlsx')
 
     print("=== 1. Buscando lojas ===")
     lojas = api.get_lojas()
@@ -244,42 +400,40 @@ def cria_corpo_do_pedido_de_venda():
     
         consulta_zig = api.get_saida_produtos(dtinicio, dtfim, loja_id)
         
-        d = consolidar_itens(consulta_zig,produtos_existentes)
-        pprint.pprint(d)
+        d = consolidar_itens_para_det(consulta_zig,produtos_existentes)
         
-        exit()
-        for produto in consulta_zig:
+        faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
 
-            """com o --"descricao": produto['productName'][:119]-- buscar o produto na lista de produtos da Omie"""
-            pprint.pprint(produto)
-            
-            tributacao = identifica_tributacao(produto['productCategory'])
-            if tributacao['status'] == 'erro':
-                print(f"Erro ao identificar tributação: {tributacao['mensagem']}")
-                continue
+        lista = montar_lista_parcelas(faturamento,data_vencimento="15/10/2025")
 
-            item = {
-                "ide": {
-                    "codigo_item_integracao": produto['productSku'] #Informar 1,2,3... para cada item do pedido
-                },
-                "inf_adic": {
-                    "peso_bruto": 1,
-                    "peso_liquido": 1
-                },
-                "produto": {
-                    "cfop": tributacao['cfop'],
-                    "codigo_produto": f'PROD{produto["productSku"]}',
-                    "descricao": produto['productName'][:119],
-                    "ncm": tributacao['ncm'],
-                    "quantidade": produto['quantity'],
-                    "unidade": "UN",
-                    "tipo_desconto":"V",
-                    "valor_desconto": 0,
-                    "valor_unitario": produto['unitValue'] / 100
-                }
-            }
-            #det.append(item)   
+        print(lista)       
 
+        pedido = {
+            "cabecalho": {
+                "codigo_cliente": 2483785544, # 'codigo_cliente_omie' na API ListarClientes
+                "codigo_pedido_integracao": "19000010", #Esse valor vem do zig
+                "data_previsao": "15/10/2025",
+                "etapa": "10",
+                "numero_pedido": "27460",
+                "codigo_parcela": "999",
+                "qtde_parcelas": 2,
+                "origem_pedido": "API"
+            },
+            "det": d,
+            "informacoes_adicionais": {
+                "codigo_categoria": "1.01.01",
+                "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes
+                "consumidor_final": "S",
+                "enviar_email": "N"
+            },
+                
+            "lista_parcelas": lista
+            } 
+
+        print(pedido)
+        resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
+
+        print(resposta)
 cria_corpo_do_pedido_de_venda()
 
 exit()
@@ -467,7 +621,7 @@ if __name__ == "__main__":
                 ],
             "informacoes_adicionais": {
                 "codigo_categoria": "1.01.01",
-                "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes
+                "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes ('Conta caixinha' -> 2461399515) | Zig: 2514366910
                 "consumidor_final": "S",
                 "enviar_email": "N"
             },
