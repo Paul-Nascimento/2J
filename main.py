@@ -44,7 +44,11 @@ def identifica_tributacao(categoria):
         ncm = '22089000'
 
     else:
-        return {"status": "erro", "mensagem": f"Categoria '{categoria}' não mapeada."}
+        #return {"status": "erro", "mensagem": f"Categoria '{categoria}' não mapeada."}
+        cfop = 5405
+        icms = 500
+        piscofins = 99
+        ncm = '22089000'
     
     return {"cfop": cfop, "icms": icms, "piscofins": piscofins, "ncm":ncm, "status": "ok"}
 
@@ -60,8 +64,8 @@ if __name__ == "__main__":
 
     # Período para teste (últimos 7 dias)
     hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
+    dtfim = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
+    dtinicio = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
 
     #categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
     #cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
@@ -95,21 +99,22 @@ if __name__ == "__main__":
         for produto in consulta_zig:
             #descricao = produto.get("descricao", "").strip()
             if str(produto['productName']).upper() in produtos_existentes:
-                print(f"Produto já existe: {produto}")
+                #print(f"Produto já existe: {produto}")
+                pass
             else:
                 produtos_a_cadastrar.append(produto)
-                print(f"Produto a cadastrar: {produto}")
-                print(f"O valor unitário é {produto['unitValue']} / 100")
+                #print(f"Produto a cadastrar: {produto}")
+                #print(f"O valor unitário é {produto['unitValue']} / 100")
                 
-                print(f'A categoria do produto é {produto["productCategory"]}')
-                print(f'O nome do produto é {produto["productName"]}')
+                #print(f'A categoria do produto é {produto["productCategory"]}')
+                #print(f'O nome do produto é {produto["productName"]}')
                 tributacao = identifica_tributacao(produto['productCategory'])
 
                 if tributacao['status'] == 'erro':
                     print(f"Erro ao identificar tributação: {tributacao['mensagem']}")
                     continue
 
-                print(tributacao)
+                #print(tributacao)
 
                 produto = {
                     "codigo_produto_integracao": produto['productSku'],
@@ -124,15 +129,18 @@ if __name__ == "__main__":
                     'csosn_icms': tributacao['icms'],
                 }
 
-
-                try:
-                    incluir_produto(APP_KEY, APP_SECRET, produto)
                
+                if produto['descricao'] == 'PICANHA 2 PESSOAS ( picanha 400g, 200g batata frita , arroz  com brocolis  e vinagrete).':
+                    print('incluindo produto')
+                    print(produto)
+                    produto['codigo'] = produto['codigo'] + '9'
+                    produto['codigo_produto_integracao'] = produto['codigo_produto_integracao'] + '9'
+                    print(produto)        
+                    incluir_produto(APP_KEY, APP_SECRET, produto)
+            
                     time.sleep(1)  # Para evitar problemas de limite de requisições
                     print(f"Produto cadastrado: {produto['descricao']}")
-                except Exception as e:
-                    print(f"Erro ao cadastrar produto {produto['descricao']}: {e}")
-                    erros_ao_cadastrar.append((produto, str(e)))
+                
 
         import pandas as pd 
 
@@ -146,18 +154,6 @@ if __name__ == "__main__":
 
         faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
 
-        det = [{
-            
-                "ide": {
-                    "codigo_item_integracao": "1" #Informar 1,2,3... para cada item do pedido
-                },
-                "inf_adic": {
-                    "peso_bruto": 1,
-                    "peso_liquido": 1
-                },
-                
-                }
-        ]
         pedido = {
             "cabecalho": {
                 "codigo_cliente": 2483785544, # 'codigo_cliente_omie' na API ListarClientes
@@ -220,4 +216,4 @@ if __name__ == "__main__":
             }
 
         #clientes = consultar_clientes(APP_KEY,APP_SECRET)
-        resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
+        #resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
