@@ -49,8 +49,8 @@ def run_pipeline(rede, token):
 
     # Período para teste (últimos 7 dias)
     hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=1)).strftime("%Y-%m-%d")
+    dtfim = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
+    dtinicio = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
     #dtinicio = dtfim
     print("=== 1. Buscando lojas ===")
     lojas = api.get_lojas()
@@ -71,16 +71,18 @@ def run_pipeline(rede, token):
     import pandas as pd
 
     df = pd.DataFrame(produtos)
-    df.to_excel('produtoszig.xlsx')
+    #df.to_excel('produtoszig.xlsx')
 
-    exit()
-
+    
     print("\n=== 3. Faturamento ===")
     faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
     valor_total = sum(item.get("value", 0) for item in faturamento) if faturamento else 0
     print(f"Faturamento total: R$ {valor_total / 100:.2f}")
-    df = pd.DataFrame(faturamento)
-    df.to_excel("saida_faturamento.xlsx", index=False)    
+    print(faturamento)
+    #df = pd.DataFrame(faturamento)
+    #df.to_excel("saida_faturamento.xlsx", index=False)   
+
+    exit() 
 
     print("\n=== 4. Detalhes de Faturamento (Máquinas) ===")
     detalhes = api.get_detalhes_maquinas(dtinicio, dtfim, loja_id)
