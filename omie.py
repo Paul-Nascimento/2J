@@ -323,32 +323,7 @@ def criar_produtos_em_lote(
 
 
 
-APP_KEY = '5521527811800'
-APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
-categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=334)
-#resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000)
 
-import pandas as pd
-df = pd.DataFrame(categorias)
-df.to_excel("saida_categorias_omie-v4.xlsx", index=False)
-
-
-
-
-
-
-clientes = consultar_clientes(APP_KEY,APP_SECRET)
-#resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
-#print("Resposta da API:", resposta)
-resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
-
-import pandas as pd
-df = pd.DataFrame(clientes)
-
-df.to_excel("saida_clientes_omie.xlsx", index=False)
-
-df_cc = pd.DataFrame(resp)
-df_cc.to_excel("saida_contas_correntes_omie.xlsx", index=False)
 
 if __name__ == "__main__":
     APP_KEY = '5521527811800'
@@ -358,6 +333,7 @@ if __name__ == "__main__":
     #cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
     #clientes = consultar_clientes(APP_KEY, APP_SECRET)
     lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
+    print(lp)
     
     import pandas as pd
     df = pd.DataFrame(lp.get('produto_servico_cadastro', []))
