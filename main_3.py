@@ -348,7 +348,8 @@ def montar_lista_parcelas(faturamento, data_vencimento=None):
             "data_vencimento": dv,
             "numero_parcela": idx,
             "percentual": perc,      # ajuste final depois
-            "valor": valor_reais
+            "valor": valor_reais,
+            "meio_pagamento":'03'
         })
 
     # Ajuste de arredondamento para fechar exatamente 100.00%
@@ -372,8 +373,8 @@ def cria_corpo_do_pedido_de_venda():
 
     # Período para teste (últimos 7 dias)
     hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
+    dtfim = (hoje - timedelta(days=15)).strftime("%Y-%m-%d")
+    dtinicio = (hoje - timedelta(days=15)).strftime("%Y-%m-%d")
     #lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
     
     lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
@@ -404,17 +405,17 @@ def cria_corpo_do_pedido_de_venda():
         
         faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
 
-        lista = montar_lista_parcelas(faturamento,data_vencimento="15/10/2025")
+        print(faturamento)
+        lista = montar_lista_parcelas(faturamento,data_vencimento="16/09/2025")
 
         print(lista)       
-
         pedido = {
             "cabecalho": {
                 "codigo_cliente": 2483785544, # 'codigo_cliente_omie' na API ListarClientes
-                "codigo_pedido_integracao": "19000010", #Esse valor vem do zig
-                "data_previsao": "15/10/2025",
+                "codigo_pedido_integracao": "19000011", #Esse valor vem do zig
+                "data_previsao": "15/09/2025",
                 "etapa": "10",
-                "numero_pedido": "27460",
+                "numero_pedido": "27461",
                 "codigo_parcela": "999",
                 "qtde_parcelas": 2,
                 "origem_pedido": "API"
@@ -422,7 +423,7 @@ def cria_corpo_do_pedido_de_venda():
             "det": d,
             "informacoes_adicionais": {
                 "codigo_categoria": "1.01.01",
-                "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes
+                "codigo_conta_corrente": 2514366910, #nCodCC na api ListarContasCorrentes
                 "consumidor_final": "S",
                 "enviar_email": "N"
             },
@@ -621,7 +622,7 @@ if __name__ == "__main__":
                 ],
             "informacoes_adicionais": {
                 "codigo_categoria": "1.01.01",
-                "codigo_conta_corrente": 2483743038, #nCodCC na api ListarContasCorrentes ('Conta caixinha' -> 2461399515) | Zig: 2514366910
+                "codigo_conta_corrente": 2514366910, #nCodCC na api ListarContasCorrentes ('Conta caixinha' -> 2461399515) | Zig: 2514366910
                 "consumidor_final": "S",
                 "enviar_email": "N"
             },
@@ -629,13 +630,13 @@ if __name__ == "__main__":
             "lista_parcelas": {
                 "parcela": [
                 {
-                        "data_vencimento": "15/09/2025",
+                        "data_vencimento": "16/09/2025",
                         "numero_parcela": 1,
                         "percentual": 97.08,
                         "valor": 9107.49
                     },
                     {
-                        "data_vencimento": "19/01/2026",
+                        "data_vencimento": "16/09/2025",
                         "numero_parcela": 2,
                         "percentual": 2.92,
                         "valor": 273.60
