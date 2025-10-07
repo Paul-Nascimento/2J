@@ -5,6 +5,51 @@ import pprint
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
+
+import requests
+import json
+
+def listar_meios_pagamento(app_key: str, app_secret: str, pagina: int = 1, registros_por_pagina: int = 100) -> dict:
+    """
+    Lista os meios de pagamento cadastrados no Omie.
+    Documentação: https://app.omie.com.br/api/v1/geral/meiospagamento/#ListarMeiosPagamento
+
+    Parâmetros:
+        app_key (str): Chave da aplicação Omie.
+        app_secret (str): Segredo da aplicação Omie.
+        pagina (int): Página da consulta (default = 1).
+        registros_por_pagina (int): Quantos registros retornar por página (default = 100).
+
+    Retorna:
+        dict: Dicionário com os meios de pagamento e dados de paginação.
+    """
+    url = "https://app.omie.com.br/api/v1/geral/meiospagamento/"
+    payload = {
+        "call": "ListarMeiosPagamento",
+        "app_key": app_key,
+        "app_secret": app_secret,
+        "param": [
+            {
+                "codigo":""
+                
+            }
+        ]
+    }
+
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(url, data=json.dumps(payload), headers=headers)
+
+    if response.status_code == 200:
+        try:
+            data = response.json()
+            return data
+        except json.JSONDecodeError:
+            raise ValueError("Erro ao decodificar a resposta JSON do Omie.")
+    else:
+        raise ConnectionError(f"Erro {response.status_code} ao consultar a API Omie: {response.text}")
+
+
+
 drinks =  ['VINHOS ROSE',
             'ESPUMANTES',
             'SOFT DRINKS',
