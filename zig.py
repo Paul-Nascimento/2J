@@ -94,7 +94,7 @@ def _map_meio_pagamento(payment_name: str) -> str:
     key = _norm(payment_name)
     return _DEPARA_ZIG_OMIE.get(key, "99")
 
-def montar_lista_parcelas(
+def montar_lista_parcelas_(
     faturamento: List[Dict[str, Any]],
     produtos: List[Dict[str, Any]],
     data_vencimento: str ,
@@ -280,7 +280,7 @@ def run_pipeline(rede, token):
     api = ZigAPI(rede, token)
 
     # Período para teste (últimos 7 dias)
-    days = 2
+    days = 6
     hoje = datetime.today()
     dtfim = (hoje - timedelta(days=days)).strftime("%Y-%m-%d")
     dtinicio = (hoje - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -313,6 +313,7 @@ def run_pipeline(rede, token):
     faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
     valor_total = sum(item.get("value", 0) for item in faturamento) if faturamento else 0
     #print(f"Faturamento total: R$ {valor_total / 100:.2f}")
+    pprint.pprint(faturamento)
     
     
     ft = montar_lista_parcelas(faturamento,produtos,data_vencimento=dtajustada)
