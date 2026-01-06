@@ -276,92 +276,93 @@ def montar_lista_parcelas_(
 # PIPELINE DE TESTE
 # ------------------------------
 
-def run_pipeline(rede, token):
+from datetime import datetime, timedelta
+from typing import Optional
+import pandas as pd
+
+def run_pipeline(
+    rede: str,
+    token: str,
+    dia_ini: str,          # "YYYY-MM-DD"
+    dia_fim: str,          # "YYYY-MM-DD"
+    loja_id: Optional[int] = None,
+    salvar_excel: Optional[str] = None,  # ex: "Produtos_ZIG_periodo.xlsx"
+):
+    """
+    Itera do dia_ini ao dia_fim (inclusive), consulta saída de produtos
+    e retorna um único DataFrame com todas as linhas agregadas.
+    Se salvar_excel for informado, salva o .xlsx ao final.
+    """
+
     api = ZigAPI(rede, token)
 
-    # Período para teste (últimos 7 dias)
-    days = 6
-    hoje = datetime.today()
-    dtfim = (hoje - timedelta(days=days)).strftime("%Y-%m-%d")
-    dtinicio = (hoje - timedelta(days=days)).strftime("%Y-%m-%d")
-    dtajustada = (hoje - timedelta(days=days)).strftime("%d/%m/%Y")
-    #dtinicio = dtfim
+    # 1) Lojas
     print("=== 1. Buscando lojas ===")
     lojas = api.get_lojas()
     if not lojas:
         print("Nenhuma loja encontrada ou erro na requisição.")
-        return
-    print(f"Lojas encontradas: {len(lojas)}")
+        return pd.DataFrame()
 
-    # Escolhe a primeira loja para os próximos testes
-    loja_id = lojas[0]["id"]
-    print(f"Usando Loja: {loja_id} - {lojas[0]['name']}")
+    if loja_id is None:
+        loja_id = lojas[0]["id"]
+        print(f"Usando Loja: {loja_id} - {lojas[0]['name']}")
+    else:
+        # tenta localizar a loja para log
+        loja_match = next((l for l in lojas if l.get("id") == loja_id), None)
+        if loja_match:
+            print(f"Usando Loja: {loja_id} - {loja_match.get('name')}")
+        else:
+            print(f"Usando Loja: {loja_id} (não encontrada na lista retornada)")
 
-    print("\n=== 2. Saída de Produtos ===")
-    produtos = api.get_saida_produtos(dtinicio, dtfim, loja_id)
-    import pprint
-    pprint.pprint(produtos)
-    #codigos = [[f"APICODE{produto['productSku']}", produto['productName'], produto['productId'],produto['productCategory']] for produto in produtos]
-    
-    import pandas as pd
+    # 2) Intervalo de datas
+    d_ini = datetime.strptime(dia_ini, "%Y-%m-%d").date()
+    d_fim = datetime.strptime(dia_fim, "%Y-%m-%d").date()
+    if d_ini > d_fim:
+        # inverte se vier trocado
+        d_ini, d_fim = d_fim, d_ini
 
-    df = pd.DataFrame(produtos)
-    #df.to_excel('produtoszig.xlsx')
+    print(f"Período: {d_ini} até {d_fim}")
 
-    
-    print("\n=== 3. Faturamento ===")
-    faturamento = api.get_faturamento(dtinicio, dtfim, loja_id)
-    valor_total = sum(item.get("value", 0) for item in faturamento) if faturamento else 0
-    #print(f"Faturamento total: R$ {valor_total / 100:.2f}")
-    pprint.pprint(faturamento)
-    
-    
-    ft = montar_lista_parcelas(faturamento,produtos,data_vencimento=dtajustada)
-    pprint.pprint(ft)
-    print(len(ft['parcela']))
-    exit()
-    
-    df = pd.DataFrame(faturamento)
-    df.to_excel("saida_faturamento.xlsx", index=False)   
+    # 3) Loop diário e agregação
+    frames = []
+    dia = d_ini
+    while dia <= d_fim:
+        dt_str = dia.strftime("%Y-%m-%d")
+        print(f"\n=== 2. Saída de Produtos — {dt_str} ===")
+        try:
+            produtos = api.get_saida_produtos(dt_str, dt_str, loja_id)
+            import time
+            time.sleep(2)  # para evitar limite de requisições
+        except Exception as e:
+            print(f"Erro ao consultar {dt_str}: {e}")
+            dia += timedelta(days=1)
+            continue
 
-  
+        if not produtos:
+            print("Sem registros para este dia.")
+            dia += timedelta(days=1)
+            continue
 
-    print("\n=== 4. Detalhes de Faturamento (Máquinas) ===")
-    detalhes = api.get_detalhes_maquinas(dtinicio, dtfim, loja_id)
-    ##print(f"Máquinas encontradas: {len(detalhes) if detalhes else 0}")
-    pprint.pprint(detalhes)
-    df = pd.DataFrame(detalhes)
-    #df.to_excel("saida_detalhes.xlsx", index=False)    
+        df_day = pd.DataFrame(produtos)
+        # anota a data de referência pra facilitar filtros/agrupamentos depois
+        df_day["data_referencia"] = dt_str
+        frames.append(df_day)
 
+        dia += timedelta(days=1)
 
-    print("\n=== 5. Invoices ===")
-    invoices = api.get_invoices(dtinicio, dtfim, loja_id)
-    #print(f"Notas fiscais encontradas: {len(invoices) if invoices else 0}")
-    #pprint.pprint(invoices)
-    df = pd.DataFrame(invoices)
-    #df.to_excel("saida_checkins.xlsx", index=False)    
+    # 4) Concat final
+    if not frames:
+        print("Nenhum dado retornado no período.")
+        return pd.DataFrame()
 
+    df_all = pd.concat(frames, ignore_index=True)
 
-    print("\n=== 6. Check-ins ===")
-    checkins = api.get_checkins(dtinicio, dtfim, loja_id)
-    #print(f"Check-ins encontrados: {len(checkins) if checkins else 0}")
-    #pprint.pp(checkins)
+    if salvar_excel:
+        df_all.to_excel(salvar_excel, index=False)
+        print(f"Arquivo salvo em: {salvar_excel}")
 
-    df = pd.DataFrame(checkins)
-    #df.to_excel("saida_checkins.xlsx", index=False)    
+    return df_all
 
-    # Exibe um resumo consolidado
-    resumo = {
-        "lojas": len(lojas),
-        "produtos": len(produtos) if produtos else 0,
-        "faturamento_total": valor_total / 100,
-        "detalhes_maquinas": len(detalhes) if detalhes else 0,
-        "invoices": len(invoices) if invoices else 0,
-        "checkins": len(checkins) if checkins else 0,
-    }
-
-    #print("\n=== RESUMO FINAL ===")
-    #print(json.dumps(resumo, indent=2, ensure_ascii=False))
 
 # ------------------------------
 # EXECUÇÃO
@@ -370,4 +371,12 @@ def run_pipeline(rede, token):
 if __name__ == "__main__":
     REDE ="4a7eeb7e-f1a4-4ab9-86ee-2472a26f494a"
     TOKEN = "97d12c95488644a583036818050c3f7c4ed7d40cdc534574baba3b217dfe137e"
-    run_pipeline(REDE, TOKEN)
+    #run_pipeline(REDE, TOKEN)
+    df_periodo = run_pipeline(
+    rede=REDE,
+    token=TOKEN,
+    dia_ini="2025-05-16",
+    dia_fim="2025-10-12",
+    salvar_excel="Produtos_ZIG_2025.xlsx",
+)
+    print(df_periodo.shape, "linhas")

@@ -1,7 +1,7 @@
 import time
 import json
 import requests
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional,Any
 
 
 class OmieContaReceberAPI:
@@ -11,32 +11,82 @@ class OmieContaReceberAPI:
         self.app_key = app_key
         self.app_secret = app_secret
         self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json"
-        })
+        self.session.headers.update({"Content-Type": "application/json"})
 
     def _post(self, call: str, param: dict):
         body = {
             "call": call,
             "app_key": self.app_key,
             "app_secret": self.app_secret,
-            "param": [param]
+            "param": [param],
         }
         resp = self.session.post(self.BASE_URL, data=json.dumps(body))
         resp.raise_for_status()
         return resp.json()
 
-    def listar_contas_receber(self, pagina: int = 1, registros_por_pagina: int = 20, apenas_importado_api: str = "N"):
-        """
-        Lista contas a receber com paginação.
-        Retorna dict com chaves: pagina, total_de_paginas, registros, total_de_registros e conta_receber_cadastro (lista).
-        """
+    def listar_contas_receber(
+        self,
+        pagina: int = 1,
+        registros_por_pagina: int = 20,
+        apenas_importado_api: str = "N",
+    ):
         param = {
             "pagina": pagina,
             "registros_por_pagina": registros_por_pagina,
-            "apenas_importado_api": apenas_importado_api
+            "apenas_importado_api": apenas_importado_api,
         }
         return self._post("ListarContasReceber", param)
+
+    def incluir_conta_receber(
+        self,
+        *,
+        codigo_lancamento_integracao: str,
+        codigo_cliente_fornecedor: int,
+        data_vencimento: str,
+        valor_documento: float,
+        codigo_categoria: str,
+        id_conta_corrente: int,
+        data_previsao: Optional[str] = None,
+        extras: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Cria um lançamento de Conta a Receber no Omie via método IncluirContaReceber.
+
+        Datas devem estar no formato "DD/MM/AAAA".
+        Campos mínimos comuns (exemplo oficial): codigo_lancamento_integracao, codigo_cliente_fornecedor,
+        data_vencimento, valor_documento, codigo_categoria, data_previsao, id_conta_corrente.
+        :contentReference[oaicite:1]{index=1}
+
+        Retorno esperado (quando sucesso) inclui "codigo_lancamento_omie" e "descricao_status".
+        :contentReference[oaicite:2]{index=2}
+        """
+        if not data_previsao:
+            data_previsao = data_vencimento
+
+        if not codigo_lancamento_integracao:
+            raise ValueError("codigo_lancamento_integracao é obrigatório (string).")
+        if not isinstance(codigo_cliente_fornecedor, int):
+            raise TypeError("codigo_cliente_fornecedor deve ser int.")
+        if not isinstance(id_conta_corrente, int):
+            raise TypeError("id_conta_corrente deve ser int.")
+        if valor_documento is None or float(valor_documento) <= 0:
+            raise ValueError("valor_documento deve ser maior que zero.")
+
+        param: Dict[str, Any] = {
+            "codigo_lancamento_integracao": str(codigo_lancamento_integracao),
+            "codigo_cliente_fornecedor": codigo_cliente_fornecedor,
+            "data_vencimento": data_vencimento,
+            "valor_documento": float(valor_documento),
+            "codigo_categoria": codigo_categoria,
+            "data_previsao": data_previsao,
+            "id_conta_corrente": id_conta_corrente,
+        }
+
+        if extras:
+            # permite enviar outros campos aceitos pela Omie sem precisar mudar assinatura
+            param.update(extras)
+
+        return self._post("IncluirContaReceber", param)
 
 def incluir_pedido_venda(app_key, app_secret, pedido):
     url = "https://app.omie.com.br/api/v1/produtos/pedido/"
@@ -326,12 +376,31 @@ def criar_produtos_em_lote(
 
 
 if __name__ == "__main__":
-    APP_KEY = '5521527811800'
-    APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
+    APP_KEY = '6327079006248'
+    APP_SECRET = '6d3cfc23d7eafa0b63a2878e8e5f01d8'
 
-    #categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
-    #cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
-    #clientes = consultar_clientes(APP_KEY, APP_SECRET)
+    
+    #pATINHO FEIO
+    #APP_KEY = '5521527811800'
+    #APP_SECRET = '9cff454af6348882c175d91a11f0d5d9'
+
+    import pandas as pd
+    #APP_KEY = '4123090876905' #YUSER
+    #APP_SECRET = 'fec203d2b600db8491d1b3ed793e2e83'
+    categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=400)
+    
+    df = pd.DataFrame(categorias['categoria_cadastro'])
+    df.to_excel("saida_categorias_omie.xlsx", index=False)
+    
+    cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
+    df_contas = pd.DataFrame(cc)
+    df_contas.to_excel("saida_contas_correntes_omie.xlsx", index=False)
+    
+    exit()
+    clientes = consultar_clientes(APP_KEY, APP_SECRET)
+    df_clientes = pd.DataFrame(clientes)
+    df_clientes.to_excel("saida_clientes_omie.xlsx", index=False)
+    
     lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
     print(lp)
     
@@ -339,91 +408,6 @@ if __name__ == "__main__":
     df = pd.DataFrame(lp.get('produto_servico_cadastro', []))
     df.to_excel("saida_produtos_omie2.xlsx", index=False)
 
-    """
-    nomes_dos_produtos = [produto['descricao'] for produto in lp.get('produto_servico_cadastro', [])]
-    print(nomes_dos_produtos)
-    #cfop = listar_cfop(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
-    #ncm =listar_ncm(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
-
-    pedido = {
-        "cabecalho": {
-            "codigo_cliente": 2483785544, # 'codigo_cliente_omie' na API ListarClientes
-            "codigo_pedido_integracao": "19000000", #Esse valor vem do zig
-            "data_previsao": "15/08/2025",
-            "etapa": "10",
-            "numero_pedido": "27447",
-            "codigo_parcela": "999",
-            "qtde_parcelas": 1,
-            "origem_pedido": "API"
-        },
-        "det": [
-            {
-            "ide": {
-                "codigo_item_integracao": "1"
-            },
-            "inf_adic": {
-                "peso_bruto": 1,
-                "peso_liquido": 1
-            },
-            "produto": {
-                "cfop": "5102",
-                "codigo_produto": "2514568647",
-                "descricao": "Produto Teste",
-                "ncm": "94033000",
-                "quantidade": 1,
-                "unidade": "UN",
-                "valor_desconto": 0,
-                "valor_unitario": 200
-                    }
-                }
-            ],
-        "informacoes_adicionais": {
-            "codigo_categoria": "2.11.01",
-            "codigo_conta_corrente": 2461399601, #nCodCC na api ListarContasCorrentes
-            "consumidor_final": "S",
-            "enviar_email": "N"
-        },
-            
-        "lista_parcelas": {
-            "parcela": [
-            {
-                    "data_vencimento": "15/08/2025",
-                    "numero_parcela": 1,
-                    "percentual": 50,
-                    "valor": 100
-                },
-                {
-                    "data_vencimento": "19/01/2026",
-                    "numero_parcela": 2,
-                    "percentual": 50,
-                    "valor": 100
-                }
-            ]
-        }
-        }
-
-    #clientes = consultar_clientes(APP_KEY,APP_SECRET)
-    #resposta = incluir_pedido_venda(APP_KEY, APP_SECRET, pedido)
-    #print("Resposta da API:", resposta)
-    resp = listar_contas_correntes(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=100)
-    #print(resp)
+    
     
 
-#Criar pedido
-#Verificar se o pedido existe
-#Criar itens
-#Inserir itens no pedido
-
-
-
-if __name__ == "__main__":
-    app_key = '5521527811800'
-    app_secret = '9cff454af6348882c175d91a11f0d5d9' 
-    api = OmieContaReceberAPI(app_key=app_key, app_secret=app_secret)
-    resp = api.listar_contas_receber(pagina=1, registros_por_pagina=50)
-    print("Página:", resp["pagina"])
-    print("Total de páginas:", resp["total_de_paginas"])
-    print("Total de registros:", resp["total_de_registros"])
-    for conta in resp.get("conta_receber_cadastro", []):
-        print(conta["codigo_lancamento_omie"], conta["valor_documento"])
-"""
