@@ -118,7 +118,7 @@ def consultar_clientes(app_key,app_secret):
         "app_secret": app_secret,
         "param": [{
             "pagina": 1,
-            "registros_por_pagina": 386
+            "registros_por_pagina": 400
         }]
     }
     headers = {"Content-Type": "application/json"}
@@ -371,7 +371,50 @@ def criar_produtos_em_lote(
 
     return sucessos, falhas
 
+def criar_cliente_pf_omie(
+    app_key: str,
+    app_secret: str,
+    nome: str,
+    cpf: str,
+    email: str = None
+):
+    """
+    Cria um cliente Pessoa Física no Omie apenas para fins financeiros
+    (sem emissão de nota fiscal).
 
+    Campos mínimos:
+    - Nome
+    - CPF
+    """
+
+    url = "https://app.omie.com.br/api/v1/geral/clientes/"
+
+    payload = {
+        "call": "IncluirCliente",
+        "app_key": app_key,
+        "app_secret": app_secret,
+        "param": [
+            {
+                "codigo_cliente_integracao": cpf,
+                "razao_social": nome,
+                "nome_fantasia": nome,
+                "cnpj_cpf": cpf,
+                "pessoa_fisica": "S",
+                "email": email,
+                "bloquear_faturamento": "N",
+                "inativo": "N"
+            }
+        ]
+    }
+
+    response = requests.post(
+        url,
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(payload)
+    )
+
+    response.raise_for_status()
+    return response.json()
 
 
 
@@ -387,19 +430,24 @@ if __name__ == "__main__":
     import pandas as pd
     #APP_KEY = '4123090876905' #YUSER
     #APP_SECRET = 'fec203d2b600db8491d1b3ed793e2e83'
-    categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=400)
+    #categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=400)
     
-    df = pd.DataFrame(categorias['categoria_cadastro'])
-    df.to_excel("saida_categorias_omie.xlsx", index=False)
+    #df = pd.DataFrame(categorias['categoria_cadastro'])
+    #df.to_excel("saida_categorias_omie.xlsx", index=False)
     
-    cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
-    df_contas = pd.DataFrame(cc)
-    df_contas.to_excel("saida_contas_correntes_omie.xlsx", index=False)
     
+    #cc = listar_contas_correntes(APP_KEY,APP_SECRET,pagina=1,registros_por_pagina=100)
+    #df_contas = pd.DataFrame(cc)
+    #df_contas.to_excel("saida_contas_correntes_omie.xlsx", index=False)
+    
+    
+
+
+    
+    #df_clientes = pd.DataFrame(clientes)
+    #df_clientes.to_excel("saida_clientes_omie.xlsx", index=False)
     exit()
-    clientes = consultar_clientes(APP_KEY, APP_SECRET)
-    df_clientes = pd.DataFrame(clientes)
-    df_clientes.to_excel("saida_clientes_omie.xlsx", index=False)
+    
     
     lp = listar_produtos(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=1000, apenas_importado_api="N", filtrar_apenas_omiepdv="N")
     print(lp)
@@ -410,4 +458,3 @@ if __name__ == "__main__":
 
     
     
-
