@@ -110,30 +110,62 @@ def incluir_pedido_venda(app_key, app_secret, pedido):
         raise Exception(f"Erro Omie API: {result['faultstring']}")
     return result
 
-def consultar_clientes(app_key,app_secret):
+import json
+import requests
+import json
+import requests
+
+def consultar_clientes(app_key, app_secret):
     url = 'https://app.omie.com.br/api/v1/geral/clientes/'
-    payload = {
-        "call": "ListarClientes",
-        "app_key": app_key,
-        "app_secret": app_secret,
-        "param": [{
-            "pagina": 1,
-            "registros_por_pagina": 400
-        }]
-    }
     headers = {"Content-Type": "application/json"}
-    resp = requests.post(url, headers=headers, data=json.dumps(payload))
-    try:
-        resp.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        print("Erro HTTP:", e)
-        print("Status:", resp.status_code)
-        print("Retorno API:", resp.text)
-        raise
-    result = resp.json()
-    if result.get("faultstring"):
-        raise Exception(f"Erro Omie API: {result['faultstring']}")
-    return result
+
+    pagina = 1
+    registros_por_pagina = 500
+    clientes_dict = {}
+
+    while True:
+        payload = {
+            "call": "ListarClientes",
+            "app_key": app_key,
+            "app_secret": app_secret,
+            "param": [{
+                "pagina": pagina,
+                "registros_por_pagina": registros_por_pagina
+            }]
+        }
+
+        resp = requests.post(url, headers=headers, data=json.dumps(payload))
+
+        try:
+            resp.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            print("Erro HTTP:", e)
+            print("Status:", resp.status_code)
+            print("Retorno API:", resp.text)
+            raise
+
+        result = resp.json()
+
+        if result.get("faultstring"):
+            raise Exception(f"Erro Omie API: {result['faultstring']}")
+
+        for cliente in result.get("clientes_cadastro", []):
+            cpfcnpj = str(cliente.get('cnpj_cpf', ''))
+            cpfcnpj = cpfcnpj.replace('.', '').replace('/', '').replace('-', '')
+            codigo_omie = cliente.get('codigo_cliente_omie')
+
+            if cpfcnpj and codigo_omie:
+                clientes_dict[cpfcnpj] = codigo_omie
+
+        total_paginas = int(result.get("total_de_paginas", 1))
+        if pagina >= total_paginas:
+            break
+
+        pagina += 1
+
+    return clientes_dict
+
+
 
 def listar_contas_correntes(app_key: str, app_secret: str, pagina: int = 1, registros_por_pagina: int = 50, apenas_importado_api: str = "N") -> dict:
     url = "https://app.omie.com.br/api/v1/geral/contacorrente/"
