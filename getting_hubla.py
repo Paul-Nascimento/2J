@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 from omie import *
+from datetime import datetime, timedelta
 
 
 #token = 'Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Ijk1MTg5MTkxMTA3NjA1NDM0NGUxNWUyNTY0MjViYjQyNWVlYjNhNWMiLCJ0eXAiOiJKV1QifQ.eyJyb2xlcGxheVNlc3Npb25zIjp7ImVTTEhPZHVJZjFWdWVUb2FUajJiMkIwZkFSUDIiOjExfSwicm9sZXBsYXlVc2VySWQiOiJlU0xIT2R1SWYxVnVlVG9hVGoyYjJCMGZBUlAyIiwicm9sZXBsYXlSZXNvdXJjZXMiOlsic2FsZXMiLCJwcm9kdWN0cyIsInJlcG9ydHMiLCJtZW1iZXJzIiwiY2xpZW50cyIsImFmZmlsaWF0ZXMiLCJjb3Vwb25zIiwicmVmdW5kcyIsIndhbGxldCIsImludGVncmF0aW9ucyIsImhvbWUiLCJzdWJzY3JpcHRpb25zIiwibWVtYmVyc19hcmVhX25vdGlmaWNhdGlvbnMiLCJtZW1iZXJzX2FyZWFfbm90aWZpY2F0aW9uc19jb21tZW50X2FwcHJvdmFsIiwibWVtYmVyc19hcmVhX25vdGlmaWNhdGlvbnNfY29tbWVudF9tZW50aW9uIiwibWVtYmVyc19hcmVhX25vdGlmaWNhdGlvbnNfY29udGVudF9ldmFsdWF0aW9uIiwibWVtYmVyc19hcmVhX25vdGlmaWNhdGlvbnNfdGFza19hcHByb3ZhbCIsInJvbGVwbGF5Il0sImhhc0NvbXBsZXRlZE1GQSI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9zZWN1cmV0b2tlbi5nb29nbGUuY29tL2NoYXRwYXktY2QxMjAiLCJhdWQiOiJjaGF0cGF5LWNkMTIwIiwiYXV0aF90aW1lIjoxNzY1MTEwMzQ5LCJ1c2VyX2lkIjoiQU1RRERiZ3huZ2dRYUVTbXRONHRHakYzNHNQMiIsInN1YiI6IkFNUUREYmd4bmdnUWFFU210TjR0R2pGMzRzUDIiLCJpYXQiOjE3NjUxMTAzNDksImV4cCI6MTc2NTExMzk0OSwiZW1haWwiOiJmaW5hbmNlaXJvQGpvdmVtZG92aW5oby5jb20uYnIiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInBob25lX251bWJlciI6Iis1NTYxOTkzMjY1NzY3IiwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJmaW5hbmNlaXJvQGpvdmVtZG92aW5oby5jb20uYnIiXSwicGhvbmUiOlsiKzU1NjE5OTMyNjU3NjciXX0sInNpZ25faW5fcHJvdmlkZXIiOiJjdXN0b20ifX0.nFdc86V_iAu0i86D7-bRyAMTBztC1Iz7StczndSsgugK9sMRnqOG1vwTkWZ5ZjDXwaw3DkKGrM1XO3wdcli50lZXKB3YMgif61ReqjkWobs3O-BGaCWwj32a3CLU6YaHA8ZVS8tTs-nRvsIn3fMbg4kkAv6tN4Wtz6UitmYcMLfSuLYuxE1s_tjrUZthUpWrFXkDB5CyqgiKAI91xAVr5HRevuen1SMzXR0Z7hqLmBQfYbL1i1s94qB0YeiMS8NRDdjVNiw0JR1PT9bprOtqeWL4xag82H7hHg2IyM7gh9JTq8hs3AkUVe-64_Z91fujjz8YQLqFie5TsiSUlI34_Q'
@@ -140,27 +141,37 @@ def get_offers(token):
     
     return ids
 
-def get_sales(token,offers):
+def get_sales(token, offers, data_inicio, data_fim):
     url = 'https://backend-bff-web.platform.hub.la/api/v1/invoices/list'
-                #Offers são os próprios produtos 
-    payload = {"offerIds":offers,
-               "hasSelectedAll":True,
-               "filters":{"startDate":"2025-12-20T00:00:00-03:00","endDate":"2025-12-20T23:59:59-03:00",
-                          "status":["paid"],
-                          "type":[],
-                          "paymentMethod":[],
-                          "search":"",
-                          "utmSource":"",
-                          "utmMedium":"",
-                          "utmCampaign":"",
-                          "utmContent":"",
-                          "utmTerm":"",
-                          "dateRangeBy":"createdAt"},
-                          "page":1,
-                          "pageSize":25,
-                          "orderBy":"createdAt",
-                          "orderDirection":"DESC"}
+    # Offers são os próprios produtos 
 
+    # ---- conversão dd/mm/yyyy -> ISO esperado pela API ----
+    inicio_iso = datetime.strptime(data_inicio, "%d/%m/%Y").strftime("%Y-%m-%dT00:00:00-03:00")
+    fim_iso = datetime.strptime(data_fim, "%d/%m/%Y").strftime("%Y-%m-%dT23:59:59-03:00")
+    # -------------------------------------------------------
+
+    payload = {
+        "offerIds": offers,
+        "hasSelectedAll": True,
+        "filters": {
+            "startDate": inicio_iso,
+            "endDate": fim_iso,
+            "status": ["paid"],
+            "type": [],
+            "paymentMethod": [],
+            "search": "",
+            "utmSource": "",
+            "utmMedium": "",
+            "utmCampaign": "",
+            "utmContent": "",
+            "utmTerm": "",
+            "dateRangeBy": "createdAt"
+        },
+        "page": 1,
+        "pageSize": 25,
+        "orderBy": "createdAt",
+        "orderDirection": "DESC"
+    }
 
     headers = {
         "Content-Type": "application/json",
@@ -168,21 +179,11 @@ def get_sales(token,offers):
     }
 
     response = requests.post(url, headers=headers, json=payload)
-    
-    #df = pd.DataFrame(response.json().get("items"))
 
-    #df.to_excel(r'D:\Projetos\2J\hublasalex.xlsx', index=False)
-
-    #print(response.json())
     if response.status_code == 201:
-        #print(response.json())
         return response.json().get("items", [])
 
-
-
     response = requests.get(url, headers=headers)
-    #print(response.json())
-
     return response.json()['items']
 
 """
@@ -202,12 +203,19 @@ APP_SECRET = '6d3cfc23d7eafa0b63a2878e8e5f01d8'
 
 
 cr = OmieContaReceberAPI(APP_KEY, APP_SECRET)
-clientes = consultar_clientes(APP_KEY, APP_SECRET)
+clientes_dict = consultar_clientes(APP_KEY, APP_SECRET)
+
+#print(clientes_dict)
+"""
 clientes_dict = {}
 for categoria in clientes['clientes_cadastro']:
     cpfcnpj = str(categoria['cnpj_cpf']).replace('.',"").replace("/","").replace("-","")
     codigo_omie = categoria['codigo_cliente_omie']
     clientes_dict[cpfcnpj] = codigo_omie
+
+print(clientes_dict.keys())
+print(len(clientes_dict.keys()))
+"""
 
 categorias = listar_categorias(APP_KEY, APP_SECRET, pagina=1, registros_por_pagina=400)
 categorias_dict = {}
@@ -224,59 +232,79 @@ sigin_token = get_sign_in(f'Bearer {secure_token}',user_id)
 toolkit_token = get_identity_toolkit_token(sigin_token)
 
 
+data_inicio = '22/12/2025'
+data_fim = '23/12/2025'
 
 import pprint
 offers =get_offers(toolkit_token)
-sales = get_sales(toolkit_token,offers)
+sales = get_sales(toolkit_token,offers,data_inicio,data_fim)
 
+codigo_lancamento_atual = 1691776462
 for sale in sales:
     produtos = sale['amountDetail']['products']
-    taxa_da_hubla = sale['amountDetail']['installmentFeeCents']
+    taxa_da_hubla = sale['amountDetail']['installmentFeeCents'] / 100
 
     payer_email = sale['payer']['identity']['email']
     payer_name = sale['payer']['identity']['fullName']
     payer_cpf = sale['payer']['identity']['document']
+    payment_method = sale['paymentMethod']
+    created_at = sale['createdAt']  # "2025-12-20T20:57:55.000Z"
+
+    # ---- REGRA DE VENCIMENTO (pix = +2 dias, senão +15) ----
+    created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    dias = 2 if payment_method == "pix" else 15
+    data_vencimento = (created_dt + timedelta(days=dias)).strftime("%d/%m/%Y")
+    # --------------------------------------------------------
+
+    import pprint
+    pprint.pprint(sale)
+    print(payment_method)
+    print(created_at)
+    print(taxa_da_hubla)
 
     for product in produtos:
-        nome_do_produto = product['productName'] #Categoria no OMIE
-        valor_do_produtos = product['priceCents'] / 100 
-        #print(product)
-        print(nome_do_produto)
-        print(valor_do_produtos)
-        print(taxa_da_hubla)
-        print(payer_name,payer_cpf)
-        print(categorias_dict[nome_do_produto])
+        nome_do_produto = product['productName']  # Categoria no OMIE
+        valor_do_produtos = product['priceCents'] / 100
 
         if payer_cpf in clientes_dict.keys():
             codigo_cliente = clientes_dict[payer_cpf]
         else:
-            codigo_cliente = criar_cliente_pf_omie(APP_KEY,APP_SECRET,payer_name,payer_cpf,payer_email)['codigo_cliente_omie']
-
-
-        #Outra validacao para categoria
+            req = criar_cliente_pf_omie(APP_KEY, APP_SECRET, payer_name, payer_cpf, payer_email)
+            codigo_cliente = req['codigo_cliente_omie']
+            
         if nome_do_produto in categorias_dict.keys():
             codigo_categoria = categorias_dict[nome_do_produto]
-
         else:
-            codigo_categoria = 'Errooo'
+            codigo_categoria = 'Erro'
+            print('Categoria não existe; precisamos cria-la')
 
-        lancamento_conta_a_receber = cr.incluir_conta_receber(
-            codigo_lancamento_integracao="1691776455",
-            codigo_cliente_fornecedor=codigo_cliente,
-            data_vencimento="11/01/2026",
-            valor_documento=valor_do_produtos,
-            codigo_categoria=codigo_categoria, #1.01.88 
-            id_conta_corrente=8657749943,
-        )
+        if codigo_categoria != 'Erro':
+            codigo_lancamento_atual += 1
+            lancamento_conta_a_receber = cr.incluir_conta_receber(
+                codigo_lancamento_integracao=str(codigo_lancamento_atual),
+                codigo_cliente_fornecedor=codigo_cliente,
+                data_vencimento=data_vencimento,  # <- aqui
+                valor_documento=valor_do_produtos,
+                codigo_categoria=codigo_categoria,
+                id_conta_corrente=8657749943,
+            )
 
-        print(lancamento_conta_a_receber)
+            print(lancamento_conta_a_receber)
 
 
+    if taxa_da_hubla > 0:
+        codigo_lancamento_atual += 1
+        codigo_categoria = categorias_dict['Juros de Parcelamento']
+        lancamento_taxa_hubla = cr.incluir_conta_receber(
+                    codigo_lancamento_integracao=str(codigo_lancamento_atual),
+                    codigo_cliente_fornecedor=codigo_cliente,
+                    data_vencimento=data_vencimento,  # <- aqui
+                    valor_documento=taxa_da_hubla,
+                    codigo_categoria=codigo_categoria,
+                    id_conta_corrente=8657749943,
+                )
 
-        #req = criar_cliente_pf_omie(APP_KEY,APP_SECRET,'Paulo Nascimento','99738961149','paulonascimento0910@gmail.com')
-    
-    exit()
-
+        print(lancamento_taxa_hubla)
 
 
 
